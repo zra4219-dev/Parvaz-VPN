@@ -15,18 +15,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract builder
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+
           test -f Parvaz-GitHub-Builder.zip
+
+          rm -rf /tmp/parvaz
           mkdir -p /tmp/parvaz
+
           unzip -q Parvaz-GitHub-Builder.zip -d /tmp/parvaz
           cp -a /tmp/parvaz/. .
+
           rm -f Parvaz-GitHub-Builder.zip
 
-      - name: Save files
+          # GitHub Actions اجازه ایجاد Workflow جدید را ندارد.
+          # فایل build.yml را بعداً دستی آپلود می‌کنیم.
+          rm -f .github/workflows/build.yml
+
+      - name: Save extracted files
+        shell: bash
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -A
-          git commit -m "Set up Parvaz builder" || exit 0
+          git commit -m "Set up Parvaz builder files"
           git push
