@@ -1,0 +1,44 @@
+name: Setup Parvaz Builder
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Extract Parvaz builder
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "Parvaz-GitHub-Builder.zip" ]; then
+            echo "Parvaz-GitHub-Builder.zip not found"
+            exit 1
+          fi
+
+          rm -rf /tmp/parvaz-builder
+          mkdir -p /tmp/parvaz-builder
+
+          unzip -q Parvaz-GitHub-Builder.zip -d /tmp/parvaz-builder
+          cp -a /tmp/parvaz-builder/. .
+
+          rm -f Parvaz-GitHub-Builder.zip
+          rm -f .github/workflows/setup.yml
+
+      - name: Save extracted files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Set up Parvaz builder [skip ci]"
+          git push
