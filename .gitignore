@@ -1,0 +1,8 @@
+*.keystore
+*.jks
+*.p12
+*.pem
+parvaz-base64.txt
+local.properties
+.gradle/
+build/
