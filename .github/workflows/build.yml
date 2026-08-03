@@ -13,13 +13,14 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout Parvaz builder
         uses: actions/checkout@v7
         with:
           path: builder
+          fetch-depth: 0
 
       - name: Checkout latest v2rayNG
         uses: actions/checkout@v7
@@ -53,12 +54,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
-      - name: Install icon generator
+      - name: Install Python dependencies
         shell: bash
         run: |
-          python3 -m pip install --disable-pip-version-check pillow==11.3.0
+          set -euo pipefail
+          python3 -m pip install \
+            --disable-pip-version-check \
+            pillow==11.3.0
 
       - name: Apply Parvaz customization
         shell: bash
@@ -66,12 +69,21 @@ jobs:
           set -euo pipefail
           python3 builder/scripts/customize.py upstream
 
+      - name: Apply Parvaz dashboard UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 builder/scripts/parvaz_ui_upgrade.py upstream
+
       - name: Build libhevtun
         working-directory: upstream
         shell: bash
         run: |
           set -euo pipefail
+
           bash compile-hevtun.sh
+
+          rm -rf V2rayNG/app/libs
           cp -r libs V2rayNG/app/
 
       - name: Download libv2ray
@@ -89,11 +101,14 @@ jobs:
           curl \
             --fail \
             --location \
-            --retry 3 \
+            --retry 5 \
+            --retry-delay 3 \
             --output V2rayNG/app/libs/libv2ray.aar \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/${CURRENT_TAG}/libv2ray.aar"
 
-      - name: Build installable APK
+          test -s V2rayNG/app/libs/libv2ray.aar
+
+      - name: Build installable Parvaz APK
         working-directory: upstream/V2rayNG
         shell: bash
         run: |
@@ -108,11 +123,12 @@ jobs:
             --stacktrace \
             assembleDebug
 
-      - name: Collect APK files
+      - name: Collect generated APK files
         shell: bash
         run: |
           set -euo pipefail
 
+          rm -rf release
           mkdir -p release
 
           find upstream/V2rayNG/app/build/outputs/apk \
@@ -130,6 +146,7 @@ jobs:
 
           sha256sum release/*.apk > release/SHA256SUMS.txt
 
+          echo "Generated files:"
           ls -lh release
 
       - name: Upload Parvaz APK
