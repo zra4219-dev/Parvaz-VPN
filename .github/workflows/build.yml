@@ -1,4 +1,4 @@
-name: Build Parvaz APK
+name: Build Parvaz arm64 APK
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: parvaz-build-${{ github.ref }}
+  group: parvaz-arm64-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,26 +54,123 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            upstream/V2rayNG/**/*.gradle*
+            upstream/V2rayNG/gradle/libs.versions.toml
+            upstream/V2rayNG/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install Python dependencies
         shell: bash
         run: |
           set -euo pipefail
+
           python3 -m pip install \
             --disable-pip-version-check \
             pillow==11.3.0
 
-      - name: Apply Parvaz customization
+      - name: Apply original Parvaz customization
         shell: bash
         run: |
           set -euo pipefail
+
           python3 builder/scripts/customize.py upstream
 
-      - name: Apply Parvaz dashboard UI
+      - name: Make default subscriptions removable
         shell: bash
         run: |
           set -euo pipefail
-          python3 builder/scripts/parvaz_ui_upgrade.py upstream
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path(
+              "upstream/V2rayNG/app/src/main/java/"
+              "com/v2ray/ang/AngApplication.kt"
+          )
+
+          text = path.read_text(encoding="utf-8")
+          seed_key = "parvaz_subscriptions_seeded_v3"
+
+          if seed_key in text:
+              print("One-time subscription seeding is already enabled.")
+              raise SystemExit(0)
+
+          pattern = re.compile(
+              r"(\n    private fun "
+              r"(?:ensureParvazDefaults|"
+              r"ensureParvazSubscriptions|"
+              r"seedParvazSubscriptionsOnce)"
+              r"\(\) \{\n)"
+              r"(.*?)"
+              r"(\n    \}\n)",
+              re.DOTALL,
+          )
+
+          match = pattern.search(text)
+
+          if match is None:
+              raise RuntimeError(
+                  "Default subscription method was not found "
+                  "in AngApplication.kt"
+              )
+
+          opening = match.group(1)
+          original_body = match.group(2)
+          closing = match.group(3)
+
+          guard = f'''        val seedKey = "{seed_key}"
+
+                  if (
+                      com.v2ray.ang.handler.MmkvManager
+                          .decodeSettingsBool(
+                              seedKey,
+                              false
+                          )
+                  ) {{
+                      return
+                  }}
+
+          '''
+
+          save_flag = '''
+                  com.v2ray.ang.handler.MmkvManager
+                      .encodeSettings(
+                          seedKey,
+                          true
+                      )
+          '''
+
+          replacement = (
+              opening
+              + guard
+              + original_body.rstrip()
+              + "\n\n"
+              + save_flag.rstrip()
+              + closing
+          )
+
+          text = (
+              text[:match.start()]
+              + replacement
+              + text[match.end():]
+          )
+
+          path.write_text(
+              text,
+              encoding="utf-8",
+          )
+
+          if seed_key not in path.read_text(encoding="utf-8"):
+              raise RuntimeError(
+                  "One-time subscription patch validation failed"
+              )
+
+          print(
+              "Default subscriptions will now be inserted only once."
+          )
+          PY
 
       - name: Build libhevtun
         working-directory: upstream
@@ -92,7 +189,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          CURRENT_TAG=$(git -C AndroidLibXrayLite describe --tags --abbrev=0)
+          CURRENT_TAG=$(
+            git -C AndroidLibXrayLite \
+              describe --tags --abbrev=0
+          )
 
           echo "AndroidLibXrayLite tag: $CURRENT_TAG"
 
@@ -108,7 +208,7 @@ jobs:
 
           test -s V2rayNG/app/libs/libv2ray.aar
 
-      - name: Build installable Parvaz APK
+      - name: Build only arm64-v8a APK
         working-directory: upstream/V2rayNG
         shell: bash
         run: |
@@ -121,9 +221,10 @@ jobs:
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            assembleDebug
+            :app:assemblePlaystoreDebug \
+            -PABI_FILTERS=arm64-v8a
 
-      - name: Collect generated APK files
+      - name: Collect only arm64-v8a APK
         shell: bash
         run: |
           set -euo pipefail
@@ -131,28 +232,45 @@ jobs:
           rm -rf release
           mkdir -p release
 
-          find upstream/V2rayNG/app/build/outputs/apk \
-            -type f \
-            -name '*.apk' \
-            -print \
-            -exec cp '{}' release/ \;
+          mapfile -t APKS < <(
+            find \
+              upstream/V2rayNG/app/build/outputs/apk/playstore/debug \
+              -type f \
+              -name '*arm64-v8a*.apk' \
+              -print
+          )
 
-          APK_COUNT=$(find release -maxdepth 1 -type f -name '*.apk' | wc -l)
+          if [ "${#APKS[@]}" -ne 1 ]; then
+            echo "Expected exactly one arm64-v8a APK."
+            echo "Found: ${#APKS[@]}"
 
-          if [ "$APK_COUNT" -eq 0 ]; then
-            echo "No APK was produced."
+            find \
+              upstream/V2rayNG/app/build/outputs/apk \
+              -type f \
+              -name '*.apk' \
+              -print || true
+
             exit 1
           fi
 
-          sha256sum release/*.apk > release/SHA256SUMS.txt
+          cp \
+            "${APKS[0]}" \
+            "release/Parvaz-arm64-v8a.apk"
 
-          echo "Generated files:"
-          ls -lh release
+          sha256sum \
+            release/Parvaz-arm64-v8a.apk \
+            > release/SHA256SUMS.txt
 
-      - name: Upload Parvaz APK
+          echo "Final APK:"
+          ls -lh release/Parvaz-arm64-v8a.apk
+
+      - name: Upload Parvaz arm64-v8a APK
         uses: actions/upload-artifact@v7
         with:
-          name: Parvaz-APK-${{ github.run_number }}
-          path: release/*
+          name: Parvaz-arm64-v8a
+          path: |
+            release/Parvaz-arm64-v8a.apk
+            release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
+          compression-level: 0
