@@ -11,6 +11,7 @@ from typing import Iterable, NoReturn
 
 APP_NAME = "Parvaz"
 APPLICATION_ID = "com.parvaz.vpn"
+
 SUBSCRIPTIONS = (
     (
         "Parvaz Collector Lite",
@@ -30,6 +31,7 @@ def fail(message: str) -> NoReturn:
 def read(path: Path) -> str:
     if not path.is_file():
         fail(f"Required file not found: {path}")
+
     return path.read_text(encoding="utf-8")
 
 
@@ -38,9 +40,18 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def replace_required(text: str, old: str, new: str, label: str) -> str:
+def replace_required(
+    text: str,
+    old: str,
+    new: str,
+    label: str,
+) -> str:
     if old not in text:
-        fail(f"Could not patch {label}: expected text was not found")
+        fail(
+            f"Could not patch {label}: "
+            "expected text was not found"
+        )
+
     return text.replace(old, new, 1)
 
 
@@ -50,9 +61,18 @@ def replace_regex_required(
     replacement: str,
     label: str,
 ) -> str:
-    result, count = pattern.subn(replacement, text, count=1)
+    result, count = pattern.subn(
+        replacement,
+        text,
+        count=1,
+    )
+
     if count != 1:
-        fail(f"Could not patch {label}: source structure has changed")
+        fail(
+            f"Could not patch {label}: "
+            "source structure has changed"
+        )
+
     return result
 
 
@@ -88,7 +108,9 @@ def patch_strings(root: Path) -> None:
     found = False
 
     pattern = re.compile(
-        r'(<string\s+name="app_name"[^>]*>)(.*?)(</string>)'
+        r'(<string\s+name="app_name"[^>]*>)'
+        r'(.*?)'
+        r'(</string>)'
     )
 
     for path in res.glob("values*/strings.xml"):
@@ -96,11 +118,13 @@ def patch_strings(root: Path) -> None:
 
         if pattern.search(text):
             found = True
+
             text = pattern.sub(
                 rf"\g<1>{APP_NAME}\g<3>",
                 text,
                 count=1,
             )
+
             write(path, text)
 
     if not found:
@@ -110,13 +134,17 @@ def patch_strings(root: Path) -> None:
 def patch_compose_theme(root: Path) -> None:
     path = (
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/compose/Theme.kt"
+        / "V2rayNG/app/src/main/java/com/v2ray/ang/"
+        "ui/compose/Theme.kt"
     )
+
     text = read(path)
 
     schemes_pattern = re.compile(
-        r"private val LightColor = lightColorScheme\(.*?^\s*\)\s*"
-        r"private val DarkColor = darkColorScheme\(.*?^\s*\)\s*",
+        r"private val LightColor = lightColorScheme\("
+        r".*?^\s*\)\s*"
+        r"private val DarkColor = darkColorScheme\("
+        r".*?^\s*\)\s*",
         re.DOTALL | re.MULTILINE,
     )
 
@@ -156,6 +184,7 @@ def patch_compose_theme(root: Path) -> None:
     surfaceContainerHigh = Color(0xFFFFE5DE),
     surfaceContainerHighest = Color(0xFFFFDED6),
 )
+
 private val DarkColor = darkColorScheme(
     primary = Color(0xFFFFB59A),
     onPrimary = Color(0xFF5B1A00),
@@ -204,23 +233,31 @@ private val DarkColor = darkColorScheme(
     semantic_replacements = {
         "val colorPingRed = Color(0xFFFF0099)":
             "val colorPingRed = Color(0xFFF72585)",
+
         "val colorConfigType = Color(0xFFf97910)":
             "val colorConfigType = Color(0xFFF72585)",
+
         "val colorFabActive = Color(0xFFf97910)":
             "val colorFabActive = Color(0xFFFF6B35)",
+
         "val dividerColorDark = Color(0xFF424242)":
             "val dividerColorDark = Color(0xFF343342)",
     }
 
     for old, new in semantic_replacements.items():
         if old not in text:
-            fail(f"Could not patch Compose semantic color: {old}")
+            fail(
+                "Could not patch Compose semantic color: "
+                f"{old}"
+            )
+
         text = text.replace(old, new, 1)
 
     write(path, text)
 
     write(
-        root / "V2rayNG/app/src/main/res/values/parvaz_colors.xml",
+        root / "V2rayNG/app/src/main/res/values/"
+        "parvaz_colors.xml",
         """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorPrimary">#FF6B35</color>
@@ -235,15 +272,18 @@ private val DarkColor = darkColorScheme(
 def patch_application(root: Path) -> None:
     path = (
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt"
+        / "V2rayNG/app/src/main/java/com/v2ray/ang/"
+        "AngApplication.kt"
     )
+
     text = read(path)
 
     if "ensureParvazSubscriptions()" not in text:
         text = replace_required(
             text,
             "MMKV.initialize(this)",
-            "MMKV.initialize(this)\n        ensureParvazSubscriptions()",
+            "MMKV.initialize(this)\n"
+            "        ensureParvazSubscriptions()",
             "default subscription initialization",
         )
 
@@ -283,43 +323,57 @@ def patch_application(root: Path) -> None:
         )
 
         val existingUrls =
-            com.v2ray.ang.handler.MmkvManager.decodeSubscriptions()
+            com.v2ray.ang.handler.MmkvManager
+                .decodeSubscriptions()
                 .map {{ it.subscription.url }}
                 .toSet()
 
         defaults.forEach {{ (remarks, url) ->
             if (url !in existingUrls) {{
-                com.v2ray.ang.handler.MmkvManager.encodeSubscription(
-                    java.util.UUID.randomUUID().toString(),
-                    com.v2ray.ang.dto.entities.SubscriptionItem(
-                        remarks = remarks,
-                        url = url,
-                        enabled = true,
-                        autoUpdate = true,
-                        updateInterval = 1440
+                com.v2ray.ang.handler.MmkvManager
+                    .encodeSubscription(
+                        java.util.UUID
+                            .randomUUID()
+                            .toString(),
+                        com.v2ray.ang.dto.entities
+                            .SubscriptionItem(
+                                remarks = remarks,
+                                url = url,
+                                enabled = true,
+                                autoUpdate = true,
+                                updateInterval = 1440
+                            )
                     )
-                )
             }}
         }}
     }}
 '''
 
-        pos = text.rfind("\n}")
+        position = text.rfind("\n}")
 
-        if pos < 0:
-            fail("Could not locate AngApplication class closing brace")
+        if position < 0:
+            fail(
+                "Could not locate AngApplication "
+                "class closing brace"
+            )
 
-        text = text[:pos] + method + text[pos:]
+        text = (
+            text[:position]
+            + method
+            + text[position:]
+        )
 
     write(path, text)
 
 
 def patch_auto_selection(root: Path) -> None:
-    vm_path = (
+    view_model_path = (
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/main/MainViewModel.kt"
+        / "V2rayNG/app/src/main/java/com/v2ray/ang/"
+        "ui/main/MainViewModel.kt"
     )
-    vm = read(vm_path)
+
+    view_model = read(view_model_path)
 
     fields_old = """    @Volatile
     private var testingGroupId: String? = null
@@ -328,26 +382,28 @@ def patch_auto_selection(root: Path) -> None:
 
     fields_new = """    @Volatile
     private var testingGroupId: String? = null
+
     private val pendingParvazTestGroups =
         java.util.ArrayDeque<String>()
+
     private var parvazTestingOnlyTcp: Boolean = false
     private var bestParvazServer: ServersCache? = null
     private var parvazTestWatchdog: Job? = null
 
     private val initialPageReady"""
 
-    if "pendingParvazTestGroups" not in vm:
-        vm = replace_required(
-            vm,
+    if "pendingParvazTestGroups" not in view_model:
+        view_model = replace_required(
+            view_model,
             fields_old,
             fields_new,
             "Parvaz test queue fields",
         )
 
-    init_old = """                dataSource.initAssets()
+    initialize_old = """                dataSource.initAssets()
                 dataSource.syncSubscriptions()"""
 
-    init_new = """                dataSource.initAssets()
+    initialize_new = """                dataSource.initAssets()
                 dataSource.syncSubscriptions()
                 dataSource.updateConfigViaSubAll()
                 setupGroupTab(forceRefresh = true).join()
@@ -356,13 +412,14 @@ def patch_auto_selection(root: Path) -> None:
 
     if (
         "dataSource.updateConfigViaSubAll()\n"
-        "                setupGroupTab(forceRefresh = true).join()"
-        not in vm
+        "                setupGroupTab("
+        "forceRefresh = true).join()"
+        not in view_model
     ):
-        vm = replace_required(
-            vm,
-            init_old,
-            init_new,
+        view_model = replace_required(
+            view_model,
+            initialize_old,
+            initialize_new,
             "automatic subscription update and startup test",
         )
 
@@ -377,6 +434,7 @@ def patch_auto_selection(root: Path) -> None:
         pendingParvazTestGroups.clear()
         bestParvazServer = null
         testingGroupId = null
+
         parvazTestWatchdog?.cancel()
         parvazTestWatchdog = null
 
@@ -395,9 +453,11 @@ def patch_auto_selection(root: Path) -> None:
     fun testAllRealPing(onlyTcp: Boolean = false) {
         dataSource.cancelAllPing()
         pendingParvazTestGroups.clear()
+
         bestParvazServer = null
         testingGroupId = null
         parvazTestingOnlyTcp = onlyTcp
+
         parvazTestWatchdog?.cancel()
 
         _uiState.update {
@@ -412,7 +472,9 @@ def patch_auto_selection(root: Path) -> None:
         viewModelScope.launch(ioDispatcher) {
             uiState.value.groups.forEach { group ->
                 if (loadGroup(group.id).isNotEmpty()) {
-                    pendingParvazTestGroups.addLast(group.id)
+                    pendingParvazTestGroups.addLast(
+                        group.id
+                    )
                 }
             }
 
@@ -423,6 +485,7 @@ def patch_auto_selection(root: Path) -> None:
                         statusText = disconnectedText
                     )
                 }
+
                 return@launch
             }
 
@@ -439,7 +502,8 @@ def patch_auto_selection(root: Path) -> None:
     }
 
     private suspend fun startNextParvazGroupTest() {
-        val groupId = pendingParvazTestGroups.pollFirst()
+        val groupId =
+            pendingParvazTestGroups.pollFirst()
 
         if (groupId == null) {
             finishParvazTesting()
@@ -470,26 +534,34 @@ def patch_auto_selection(root: Path) -> None:
 
     fun testCurrentServerRealPing() {"""
 
-    if "private suspend fun startNextParvazGroupTest()" not in vm:
-        vm = replace_regex_required(
-            vm,
+    if (
+        "private suspend fun "
+        "startNextParvazGroupTest()"
+        not in view_model
+    ):
+        view_model = replace_regex_required(
+            view_model,
             testing_pattern,
             testing_replacement,
             "multi-group real-delay testing",
         )
 
     finish_pattern = re.compile(
-        r"    private fun onTestsFinished\(\) \{.*?^\s*\}\s*"
+        r"    private fun onTestsFinished\(\) \{"
+        r".*?^\s*\}\s*"
         r"^\s*fun triggerLocateSelectedServer",
         re.DOTALL | re.MULTILINE,
     )
 
     finish_replacement = """    private fun onTestsFinished() {
-        val completedGroupId = testingGroupId ?: return
+        val completedGroupId =
+            testingGroupId ?: return
 
         viewModelScope.launch(ioDispatcher) {
             cacheMutex.withLock {
-                groupDataCache.remove(completedGroupId)
+                groupDataCache.remove(
+                    completedGroupId
+                )
             }
 
             val testedServers = loadGroup(
@@ -502,37 +574,47 @@ def patch_auto_selection(root: Path) -> None:
                 testedServers
             )
 
-            val groupBest = testedServers
-                .asSequence()
-                .filter { it.testDelayMillis > 0L }
-                .minWithOrNull(
-                    compareBy<ServersCache> {
-                        it.testDelayMillis
-                    }.thenBy {
-                        it.profile.remarks
+            val groupBest =
+                testedServers
+                    .asSequence()
+                    .filter {
+                        it.testDelayMillis > 0L
                     }
-                )
+                    .minWithOrNull(
+                        compareBy<ServersCache> {
+                            it.testDelayMillis
+                        }.thenBy {
+                            it.profile.remarks
+                        }
+                    )
 
             if (groupBest != null) {
-                val previous = bestParvazServer
+                val previous =
+                    bestParvazServer
 
                 if (
-                    previous == null ||
-                    groupBest.testDelayMillis <
-                        previous.testDelayMillis ||
-                    (
-                        groupBest.testDelayMillis ==
-                            previous.testDelayMillis &&
-                        groupBest.profile.remarks <
-                            previous.profile.remarks
+                    previous == null
+                    || groupBest.testDelayMillis
+                    < previous.testDelayMillis
+                    || (
+                        groupBest.testDelayMillis
+                        == previous.testDelayMillis
+                        && groupBest.profile.remarks
+                        < previous.profile.remarks
                     )
                 ) {
                     bestParvazServer = groupBest
-                    selectBestParvazServer(groupBest)
+
+                    selectBestParvazServer(
+                        groupBest
+                    )
                 }
             }
 
-            if (pendingParvazTestGroups.isNotEmpty()) {
+            if (
+                pendingParvazTestGroups
+                    .isNotEmpty()
+            ) {
                 startNextParvazGroupTest()
             } else {
                 finishParvazTesting()
@@ -540,8 +622,12 @@ def patch_auto_selection(root: Path) -> None:
         }
     }
 
-    private fun selectBestParvazServer(server: ServersCache) {
-        dataSource.setSelectServer(server.guid)
+    private fun selectBestParvazServer(
+        server: ServersCache
+    ) {
+        dataSource.setSelectServer(
+            server.guid
+        )
 
         dataSource.setSelectedSubscriptionId(
             server.profile.subscriptionId
@@ -563,6 +649,7 @@ def patch_auto_selection(root: Path) -> None:
 
         testingGroupId = null
         pendingParvazTestGroups.clear()
+
         parvazTestWatchdog?.cancel()
         parvazTestWatchdog = null
 
@@ -578,42 +665,55 @@ def patch_auto_selection(root: Path) -> None:
         }
 
         reloadAllGroups(
-            _uiState.value.groups.map { it.id }
+            _uiState.value.groups.map {
+                it.id
+            }
         )
     }
 
     fun triggerLocateSelectedServer"""
 
-    if "private fun selectBestParvazServer" not in vm:
-        vm = replace_regex_required(
-            vm,
+    if (
+        "private fun selectBestParvazServer"
+        not in view_model
+    ):
+        view_model = replace_regex_required(
+            view_model,
             finish_pattern,
             finish_replacement,
             "automatic best-server selection",
         )
 
-    write(vm_path, vm)
+    write(view_model_path, view_model)
 
     activity_path = (
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/main/MainActivity.kt"
+        / "V2rayNG/app/src/main/java/com/v2ray/ang/"
+        "ui/main/MainActivity.kt"
     )
+
     activity = read(activity_path)
 
     fab_pattern = re.compile(
-        r"    private fun handleFabAction\(\) \{.*?^\s*\}\s*"
+        r"    private fun handleFabAction\(\) \{"
+        r".*?^\s*\}\s*"
         r"^\s*private fun handleLayoutTestClick",
         re.DOTALL | re.MULTILINE,
     )
 
     fab_replacement = """    private fun handleFabAction() {
         if (mainViewModel.uiState.value.isRunning) {
-            LauncherManager.stopService(this)
+            CoreServiceManager.stopVService(this)
             return
         }
 
         lifecycleScope.launch {
-            if (!mainViewModel.uiState.value.isTesting) {
+            if (
+                !mainViewModel
+                    .uiState
+                    .value
+                    .isTesting
+            ) {
                 mainViewModel.testAllRealPing()
             }
 
@@ -622,9 +722,14 @@ def patch_auto_selection(root: Path) -> None:
                     300_000L
                 ) {
                     while (
-                        mainViewModel.uiState.value.isTesting
+                        mainViewModel
+                            .uiState
+                            .value
+                            .isTesting
                     ) {
-                        kotlinx.coroutines.delay(250L)
+                        kotlinx.coroutines.delay(
+                            250L
+                        )
                     }
 
                     true
@@ -636,12 +741,16 @@ def patch_auto_selection(root: Path) -> None:
 
             if (SettingsManager.isVpnMode()) {
                 val intent =
-                    VpnService.prepare(this@MainActivity)
+                    VpnService.prepare(
+                        this@MainActivity
+                    )
 
                 if (intent == null) {
                     startV2Ray()
                 } else {
-                    requestVpnPermission.launch(intent)
+                    requestVpnPermission.launch(
+                        intent
+                    )
                 }
             } else {
                 startV2Ray()
@@ -651,7 +760,10 @@ def patch_auto_selection(root: Path) -> None:
 
     private fun handleLayoutTestClick"""
 
-    if "withTimeoutOrNull(300_000L)" not in activity:
+    if (
+        "kotlinx.coroutines.withTimeoutOrNull("
+        not in activity
+    ):
         activity = replace_regex_required(
             activity,
             fab_pattern,
@@ -665,10 +777,11 @@ def patch_auto_selection(root: Path) -> None:
 def generate_icons(root: Path) -> None:
     try:
         from PIL import Image, ImageDraw
-    except ImportError as exc:
+    except ImportError as error:
         raise RuntimeError(
-            "Pillow is required to generate Parvaz launcher icons"
-        ) from exc
+            "Pillow is required to generate "
+            "Parvaz launcher icons"
+        ) from error
 
     res = root / "V2rayNG/app/src/main/res"
 
@@ -680,8 +793,15 @@ def generate_icons(root: Path) -> None:
         "mipmap-xxxhdpi": 192,
     }
 
-    def lerp(a: int, b: int, t: float) -> int:
-        return round(a + (b - a) * t)
+    def lerp(
+        first: int,
+        second: int,
+        amount: float,
+    ) -> int:
+        return round(
+            first
+            + (second - first) * amount
+        )
 
     start = (255, 107, 53)
     end = (114, 9, 183)
@@ -693,9 +813,15 @@ def generate_icons(root: Path) -> None:
             (18, 18, 31, 255),
         )
 
-        draw = ImageDraw.Draw(image, "RGBA")
+        draw = ImageDraw.Draw(
+            image,
+            "RGBA",
+        )
 
-        radius = max(4, size // 5)
+        radius = max(
+            4,
+            size // 5,
+        )
 
         draw.rounded_rectangle(
             (0, 0, size - 1, size - 1),
@@ -703,32 +829,52 @@ def generate_icons(root: Path) -> None:
             fill=(18, 18, 31, 255),
         )
 
-        segments = max(20, size // 2)
+        segments = max(
+            20,
+            size // 2,
+        )
 
         for index in range(segments):
-            t0 = index / segments
-            t1 = (index + 1) / segments
+            amount0 = index / segments
+            amount1 = (index + 1) / segments
 
             color = tuple(
-                lerp(start[i], end[i], t0)
-                for i in range(3)
+                lerp(
+                    start[channel],
+                    end[channel],
+                    amount0,
+                )
+                for channel in range(3)
             ) + (255,)
 
-            x0 = size * (0.18 + 0.56 * t0)
-            x1 = size * (0.18 + 0.56 * t1)
+            x0 = size * (
+                0.18 + 0.56 * amount0
+            )
+
+            x1 = size * (
+                0.18 + 0.56 * amount1
+            )
 
             top0 = size * (
-                0.63 - 0.43 * (t0 ** 0.72)
+                0.63
+                - 0.43
+                * (amount0 ** 0.72)
             )
+
             top1 = size * (
-                0.63 - 0.43 * (t1 ** 0.72)
+                0.63
+                - 0.43
+                * (amount1 ** 0.72)
             )
 
             bottom0 = size * (
-                0.70 - 0.17 * t0
+                0.70
+                - 0.17 * amount0
             )
+
             bottom1 = size * (
-                0.70 - 0.17 * t1
+                0.70
+                - 0.17 * amount1
             )
 
             draw.polygon(
@@ -741,7 +887,10 @@ def generate_icons(root: Path) -> None:
                 fill=color,
             )
 
-        width = max(2, size // 18)
+        width = max(
+            2,
+            size // 18,
+        )
 
         draw.line(
             (
@@ -754,28 +903,43 @@ def generate_icons(root: Path) -> None:
             width=width,
         )
 
-        speed_color = (247, 37, 133, 230)
+        speed_color = (
+            247,
+            37,
+            133,
+            230,
+        )
 
         for offset, length in (
             (0.0, 0.31),
             (0.10, 0.25),
             (0.20, 0.19),
         ):
-            y = size * (0.71 + offset)
+            y = size * (
+                0.71 + offset
+            )
 
             draw.line(
                 (
                     size * 0.15,
                     y,
-                    size * (0.15 + length),
+                    size * (
+                        0.15 + length
+                    ),
                     y,
                 ),
                 fill=speed_color,
-                width=max(1, size // 24),
+                width=max(
+                    1,
+                    size // 24,
+                ),
             )
 
         target = res / folder
-        target.mkdir(parents=True, exist_ok=True)
+        target.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         image.save(
             target / "ic_launcher.png",
@@ -811,10 +975,14 @@ def generate_icons(root: Path) -> None:
         )
 
     drawable = res / "drawable"
-    drawable.mkdir(parents=True, exist_ok=True)
+    drawable.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     write(
-        drawable / "ic_parvaz_background.xml",
+        drawable
+        / "ic_parvaz_background.xml",
         """<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
@@ -824,7 +992,8 @@ def generate_icons(root: Path) -> None:
     )
 
     write(
-        drawable / "ic_parvaz_foreground.xml",
+        drawable
+        / "ic_parvaz_foreground.xml",
         """<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
@@ -864,15 +1033,21 @@ def generate_icons(root: Path) -> None:
 """,
     )
 
-    folder = res / "mipmap-anydpi-v26"
-    folder.mkdir(parents=True, exist_ok=True)
+    adaptive_folder = (
+        res / "mipmap-anydpi-v26"
+    )
+
+    adaptive_folder.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     for name in (
         "ic_launcher.xml",
         "ic_launcher_round.xml",
     ):
         write(
-            folder / name,
+            adaptive_folder / name,
             """<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_parvaz_background" />
@@ -884,76 +1059,128 @@ def generate_icons(root: Path) -> None:
 
 def validate(root: Path) -> None:
     gradle = read(
-        root / "V2rayNG/app/build.gradle.kts"
+        root
+        / "V2rayNG/app/build.gradle.kts"
     )
 
-    if f'applicationId = "{APPLICATION_ID}"' not in gradle:
-        fail("applicationId validation failed")
+    if (
+        f'applicationId = "{APPLICATION_ID}"'
+        not in gradle
+    ):
+        fail(
+            "applicationId validation failed"
+        )
 
     strings = read(
         root
-        / "V2rayNG/app/src/main/res/values/strings.xml"
+        / "V2rayNG/app/src/main/res/"
+        "values/strings.xml"
     )
 
     if f">{APP_NAME}</string>" not in strings:
-        fail("app name validation failed")
+        fail(
+            "app name validation failed"
+        )
 
     theme = read(
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/compose/Theme.kt"
+        / "V2rayNG/app/src/main/java/"
+        "com/v2ray/ang/ui/compose/Theme.kt"
     )
 
     if (
-        "background = Color(0xFF12121F)" not in theme
-        or "primaryContainer = Color(0xFFFF6B35)" not in theme
+        "background = Color(0xFF12121F)"
+        not in theme
+        or
+        "primaryContainer = "
+        "Color(0xFFFF6B35)"
+        not in theme
     ):
-        fail("Compose theme validation failed")
+        fail(
+            "Compose theme validation failed"
+        )
 
-    app = read(
+    application = read(
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/AngApplication.kt"
+        / "V2rayNG/app/src/main/java/"
+        "com/v2ray/ang/AngApplication.kt"
     )
 
     for _, url in SUBSCRIPTIONS:
-        if url not in app:
+        if url not in application:
             fail(
-                f"Subscription validation failed: {url}"
+                "Subscription validation failed: "
+                f"{url}"
             )
 
-    vm = read(
+    view_model = read(
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/main/MainViewModel.kt"
+        / "V2rayNG/app/src/main/java/"
+        "com/v2ray/ang/ui/main/"
+        "MainViewModel.kt"
     )
 
     if (
-        "pendingParvazTestGroups" not in vm
-        or "selectBestParvazServer" not in vm
+        "pendingParvazTestGroups"
+        not in view_model
+        or
+        "selectBestParvazServer"
+        not in view_model
     ):
-        fail("automatic selection validation failed")
+        fail(
+            "automatic selection "
+            "validation failed"
+        )
 
     activity = read(
         root
-        / "V2rayNG/app/src/main/java/com/v2ray/ang/ui/main/MainActivity.kt"
+        / "V2rayNG/app/src/main/java/"
+        "com/v2ray/ang/ui/main/"
+        "MainActivity.kt"
     )
 
-    if "withTimeoutOrNull(300_000L)" not in activity:
-        fail("Connect automation validation failed")
+    if (
+        "kotlinx.coroutines.withTimeoutOrNull("
+        not in activity
+    ):
+        fail(
+            "Connect automation "
+            "validation failed"
+        )
+
+    if (
+        "CoreServiceManager.stopVService(this)"
+        not in activity
+    ):
+        fail(
+            "Stop service automation "
+            "validation failed"
+        )
 
 
 def main(argv: Iterable[str]) -> int:
-    args = list(argv)
+    arguments = list(argv)
 
-    if len(args) != 2:
+    if len(arguments) != 2:
         print(
-            f"Usage: {args[0]} PATH_TO_V2RAYNG_CHECKOUT",
+            "Usage: "
+            f"{arguments[0]} "
+            "PATH_TO_V2RAYNG_CHECKOUT",
             file=sys.stderr,
         )
+
         return 2
 
-    root = Path(args[1]).resolve()
+    root = Path(
+        arguments[1]
+    ).resolve()
 
-    if not (root / "V2rayNG").is_dir():
-        fail(f"Not a v2rayNG checkout: {root}")
+    if not (
+        root / "V2rayNG"
+    ).is_dir():
+        fail(
+            f"Not a v2rayNG checkout: {root}"
+        )
 
     patch_gradle(root)
     patch_strings(root)
@@ -964,7 +1191,8 @@ def main(argv: Iterable[str]) -> int:
     validate(root)
 
     print(
-        "Parvaz customization completed successfully."
+        "Parvaz customization "
+        "completed successfully."
     )
 
     return 0
@@ -972,10 +1200,13 @@ def main(argv: Iterable[str]) -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main(sys.argv))
+        raise SystemExit(
+            main(sys.argv)
+        )
     except Exception as error:
         print(
             f"ERROR: {error}",
             file=sys.stderr,
         )
+
         raise
